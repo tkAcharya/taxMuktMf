@@ -12,7 +12,10 @@ Indian equity mutual fund investors get a ₹1.25L annual LTCG exemption under S
 ---
 ## Don't just take my word for it—watch it work!
 
-Video: https://youtu.be/E3ZOXjN4q4o
+[Watch the video on YouTube](https://youtu.be/E3ZOXjN4q4o)
+
+
+Screenshots: <br />
 <img width="662" height="319" alt="image" src="https://github.com/user-attachments/assets/0dd8e1b6-3358-4e4a-94e7-e109ffade88e" />
 <img width="1340" height="1284" alt="image" src="https://github.com/user-attachments/assets/39028b5d-ea31-4021-b433-341d6e1a0d3a" />
 <img width="1238" height="1216" alt="image" src="https://github.com/user-attachments/assets/3063946a-8fe2-4df1-80b8-91850f9f8dcd" />
