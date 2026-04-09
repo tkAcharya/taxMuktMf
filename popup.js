@@ -1,11 +1,13 @@
 import { parseCAS, computeLTCGHarvesting, fetchLiveNAVs, fetchFundMeta, saveState, loadState, clearState } from './parser.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
+const STORAGE_VERSION = 4; // bump this whenever parser changes break saved state
 let state = { investor:{}, holdings:[], rawText:'', format:'' };
 let liveNAVs = {};
 let ledger = []; // [{id, date, type, schemeCode, schemeName, units, navAtTime, value, gain, note}]
 let ltcgExemption = 125000, existingGains = 0;
 let newsRendered = false, companiesRendered = false;
+let privacyMode = false;
 
 const S = id => document.getElementById(id);
 const COLORS = ['#4f8ef7','#22c55e','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f97316','#ec4899'];
@@ -14,20 +16,28 @@ const COLORS = ['#4f8ef7','#22c55e','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f9
 (async () => {
   const saved = await loadState();
   if (saved) {
-    state = saved.state || state;
-    ledger = saved.ledger || [];
-    ltcgExemption = saved.ltcgExemption || 125000;
-    existingGains = saved.existingGains || 0;
-    if (state.holdings?.length) {
-      // Render all tabs from saved state immediately
-      showResultUI();
-      renderResults();
-      showScreen('portfolioScreen');
-      document.querySelector('.tab[data-tab="portfolio"]').classList.add('active');
-      // Then re-fetch live NAVs silently and refresh portfolio
-      fetchLiveNAVs(state.holdings).then(navs => {
-        liveNAVs = navs; injectLiveNAVs(); renderPortfolio();
-      }).catch(() => {});
+    // Invalidate saved state if storage version has changed (parser may have changed)
+    if ((saved.version || 0) < STORAGE_VERSION) {
+      await clearState();
+      console.log('Storage version mismatch — cleared stale cache. Please re-upload your PDF.');
+      const note = S('staleCacheNote');
+      if (note) note.style.display = 'block';
+    } else {
+      state = saved.state || state;
+      ledger = saved.ledger || [];
+      ltcgExemption = saved.ltcgExemption || 125000;
+      existingGains = saved.existingGains || 0;
+      privacyMode = saved.privacyMode || false;
+      applyPrivacyIcon();
+      if (state.holdings?.length) {
+        showResultUI();
+        renderResults();
+        showScreen('portfolioScreen');
+        document.querySelector('.tab[data-tab="portfolio"]').classList.add('active');
+        fetchLiveNAVs(state.holdings).then(navs => {
+          liveNAVs = navs; injectLiveNAVs(); renderPortfolio();
+        }).catch(() => {});
+      }
     }
   }
   if (!state.holdings?.length) showScreen('uploadScreen');
@@ -232,24 +242,103 @@ function renderPie(holdings) {
 }
 
 // ── LTCG ──────────────────────────────────────────────────────────────────────
+// Use a single delegated listener on the static ltcgScreen container so the
+// calcBtn always works even when ltcgSettings innerHTML is re-rendered.
+(function wireLTCGDelegation() {
+  S('ltcgScreen').addEventListener('click', e => {
+    if (e.target.id === 'calcBtn' || e.target.closest('#calcBtn')) {
+      runCalculate();
+    }
+  });
+  // `input` fires on every keystroke; `change` fires on blur — handle both
+  // so globals are always current regardless of how the user interacts
+  const syncInputs = e => {
+    if (e.target.id === 'exemptionInput') {
+      const v = parseFloat(e.target.value);
+      ltcgExemption = (!isNaN(v) && v >= 0) ? v : 125000;
+    }
+    if (e.target.id === 'existingInput') {
+      const v = parseFloat(e.target.value);
+      existingGains = (!isNaN(v) && v >= 0) ? v : 0;
+    }
+  };
+  S('ltcgScreen').addEventListener('input',  syncInputs);
+  S('ltcgScreen').addEventListener('change', e => { syncInputs(e); persist(); });
+}());
+
+function runCalculate() {
+  // Read current input values
+  ltcgExemption = +(S('exemptionInput')?.value) || 125000;
+  existingGains = +(S('existingInput')?.value)  || 0;
+
+  // Disable button and show loading state
+  const btn = S('calcBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Calculating…'; btn.style.opacity = '0.6'; }
+
+  // Show inline progress bar inside ltcgResults while computing
+  const el = S('ltcgResults');
+  el.innerHTML = `
+    <div style="padding:20px 0">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;text-align:center">
+        Computing harvesting plan…
+      </div>
+      <div style="height:3px;background:var(--bg3);border-radius:2px;overflow:hidden">
+        <div id="ltcgCalcBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:2px;transition:width 0.25s ease"></div>
+      </div>
+    </div>`;
+
+  // Animate the bar across three micro-ticks so the browser actually paints it
+  requestAnimationFrame(() => {
+    const bar = S('ltcgCalcBar');
+    if (bar) bar.style.width = '30%';
+    setTimeout(() => {
+      if (bar) bar.style.width = '70%';
+      setTimeout(() => {
+        if (bar) bar.style.width = '100%';
+        setTimeout(() => {
+          renderLTCGResults();
+          persist();
+          // Re-enable button
+          const b = S('calcBtn');
+          if (b) { b.disabled = false; b.textContent = 'Calculate'; b.style.opacity = ''; }
+        }, 120);
+      }, 80);
+    }, 80);
+  });
+}
+
 function renderLTCGSettings() {
   S('ltcgSettings').innerHTML = `
     <div class="ltcg-row"><span class="ltcg-label">LTCG exemption limit (₹)</span><input class="ltcg-input" id="exemptionInput" type="number" step="1000" value="${ltcgExemption}"/></div>
-    <div class="ltcg-row"><span class="ltcg-label">Gains already booked this FY (₹)</span><input class="ltcg-input" id="existingInput" type="number" step="1000" value="${existingGains}"/></div>
+    <div class="ltcg-row">
+      <span class="ltcg-label tooltip-wrap">
+        Gains already booked this FY (₹)
+        <span class="tooltip-icon">?
+          <span class="tooltip-bubble">
+            Enter LTCG you've already booked this FY.<br>
+            This number must exceed your <strong>unused exemption</strong> (₹${fmt(Math.max(0, ltcgExemption - sum(state.holdings, h => h.ltcgGain||0)))} remaining) to reduce the suggested harvest.
+          </span>
+        </span>
+      </span>
+      <input class="ltcg-input" id="existingInput" type="number" step="1000" value="${existingGains}"/>
+    </div>
     <div class="ltcg-row" style="margin-top:4px">
       <span class="ltcg-label" style="font-size:10px;color:var(--text3)">Sell → reinvest same day · cost basis resets · zero tax</span>
       <button class="btn btn-primary btn-sm" id="calcBtn">Calculate</button>
     </div>`;
-  S('exemptionInput').addEventListener('change', e => { ltcgExemption = +e.target.value||125000; persist(); });
-  S('existingInput').addEventListener('change', e => { existingGains = +e.target.value||0; persist(); });
-  S('calcBtn').addEventListener('click', () => {
-    ltcgExemption = +S('exemptionInput').value||125000;
-    existingGains = +S('existingInput').value||0;
-    renderLTCGResults(); persist();
-  });
 }
 
 function renderLTCGResults() {
+  // Always read directly from DOM inputs so we get the live typed value,
+  // not a potentially stale global. Fall back to globals when inputs aren't rendered.
+  const exemptEl = S('exemptionInput');
+  const existEl  = S('existingInput');
+  const curExemption = exemptEl ? (parseFloat(exemptEl.value) || ltcgExemption) : ltcgExemption;
+  const curExisting  = existEl  ? (parseFloat(existEl.value)  || 0)              : existingGains;
+  // Sync globals so the summary display uses the same values
+  ltcgExemption = curExemption;
+  existingGains = curExisting;
+
   const budget = Math.max(0, ltcgExemption - existingGains);
   const res = computeLTCGHarvesting(state.holdings, budget);
   const el = S('ltcgResults');
@@ -581,7 +670,7 @@ async function renderNews() {
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 async function persist() {
-  await saveState({ state, ledger, ltcgExemption, existingGains });
+  await saveState({ version: STORAGE_VERSION, state, ledger, ltcgExemption, existingGains, privacyMode });
 }
 
 async function doReset() {
@@ -603,6 +692,15 @@ function metric(label, val, sub='', cls='neu') {
 }
 function fmt(n) {
   if (n==null||isNaN(n)) return '–';
+  if (privacyMode) {
+    // Replace each digit with X, keep ₹ sign, suffix, separators
+    const a=Math.abs(n),s=n<0?'-':'';
+    let str;
+    if(a>=1e7) str = s+'₹'+(a/1e7).toFixed(2)+' Cr';
+    else if(a>=1e5) str = s+'₹'+(a/1e5).toFixed(2)+'L';
+    else str = s+'₹'+Math.round(a).toLocaleString('en-IN');
+    return str.replace(/\d/g, 'X');
+  }
   const a=Math.abs(n),s=n<0?'-':'';
   if(a>=1e7) return s+'₹'+(a/1e7).toFixed(2)+' Cr';
   if(a>=1e5) return s+'₹'+(a/1e5).toFixed(2)+'L';
@@ -629,6 +727,29 @@ function guessAMC(s) {
   if(/uti/i.test(s)) return 'UTI';
   return 'Other';
 }
+function applyPrivacyIcon() {
+  const eye = S('eyeIcon'), eyeOff = S('eyeOffIcon'), btn = S('privacyBtn');
+  if (!eye) return;
+  eye.style.display = privacyMode ? 'none' : 'block';
+  eyeOff.style.display = privacyMode ? 'block' : 'none';
+  btn.style.color = privacyMode ? 'var(--amber)' : '';
+  btn.title = privacyMode ? 'Privacy mode ON — click to show values' : 'Hide monetary values';
+  document.body.classList.toggle('privacy-on', privacyMode);
+}
+
+S('privacyBtn').addEventListener('click', () => {
+  privacyMode = !privacyMode;
+  applyPrivacyIcon();
+  persist();
+  // Re-render all active content so masking applies immediately
+  if (state.holdings?.length) {
+    renderResults();
+    if (newsRendered) { newsRendered = false; renderNews(); }
+    if (companiesRendered) { companiesRendered = false; renderCompanies(); }
+    renderLedger();
+  }
+});
+
 function showScreen(id) {
   ['uploadScreen','parsingScreen','portfolioScreen','ltcgScreen','ledgerScreen','holdingsScreen','newsScreen','rawScreen','errorScreen']
     .forEach(sid => S(sid).style.display = sid===id ? 'block' : 'none');
