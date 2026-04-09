@@ -19,6 +19,7 @@ const COLORS = ['#4f8ef7','#22c55e','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f9
     // Invalidate saved state if storage version has changed (parser may have changed)
     if ((saved.version || 0) < STORAGE_VERSION) {
       await clearState();
+      privacyMode = false;
       console.log('Storage version mismatch — cleared stale cache. Please re-upload your PDF.');
       const note = S('staleCacheNote');
       if (note) note.style.display = 'block';
@@ -41,6 +42,7 @@ const COLORS = ['#4f8ef7','#22c55e','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f9
     }
   }
   if (!state.holdings?.length) showScreen('uploadScreen');
+  applyPrivacyIcon();
 })();
 
 // ── Upload wiring ─────────────────────────────────────────────────────────────
@@ -678,6 +680,8 @@ async function doReset() {
   await clearState();
   state = { investor:{}, holdings:[], rawText:'', format:'' };
   liveNAVs = {}; ledger = []; newsRendered = false; companiesRendered = false;
+  privacyMode = false;
+  applyPrivacyIcon();
   S('tabs').style.display = 'none'; S('resetBtn').style.display = 'none';
   S('savedBadge').style.display = 'none';
   S('fileInput').value = ''; S('parseLog').innerHTML = '';
@@ -729,7 +733,9 @@ function guessAMC(s) {
 }
 function applyPrivacyIcon() {
   const eye = S('eyeIcon'), eyeOff = S('eyeOffIcon'), btn = S('privacyBtn');
-  if (!eye) return;
+  if (!eye || !btn) return;
+  btn.disabled = false;
+  btn.style.opacity = '';
   eye.style.display = privacyMode ? 'none' : 'block';
   eyeOff.style.display = privacyMode ? 'block' : 'none';
   btn.style.color = privacyMode ? 'var(--amber)' : '';
