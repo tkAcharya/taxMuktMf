@@ -64,6 +64,8 @@ Get your statement: [camsonline.com](https://www.camsonline.com) → Investors �
 
 `storage` is `chrome.storage.local` — your device only, not synced. No personal data is sent in any request. Your PDF, PAN, folio numbers, and investment values never leave your browser.
 
+Privacy mode is **on by default** — monetary values, email, and folio numbers are masked with `X` until you click the eye icon in the header.
+
 ---
 
 ## Getting Started

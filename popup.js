@@ -1,13 +1,13 @@
 import { parseCAS, computeLTCGHarvesting, fetchLiveNAVs, fetchFundMeta, saveState, loadState, clearState } from './parser.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const STORAGE_VERSION = 4; // bump this whenever parser changes break saved state
+const STORAGE_VERSION = 5; // bumped: privacyMode now defaults to true
 let state = { investor:{}, holdings:[], rawText:'', format:'' };
 let liveNAVs = {};
 let ledger = []; // [{id, date, type, schemeCode, schemeName, units, navAtTime, value, gain, note}]
 let ltcgExemption = 125000, existingGains = 0;
 let newsRendered = false, companiesRendered = false;
-let privacyMode = false;
+let privacyMode = true; // on by default — user explicitly opts in to see values
 
 const S = id => document.getElementById(id);
 const COLORS = ['#4f8ef7','#22c55e','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f97316','#ec4899'];
@@ -19,7 +19,6 @@ const COLORS = ['#4f8ef7','#22c55e','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f9
     // Invalidate saved state if storage version has changed (parser may have changed)
     if ((saved.version || 0) < STORAGE_VERSION) {
       await clearState();
-      privacyMode = false;
       console.log('Storage version mismatch — cleared stale cache. Please re-upload your PDF.');
       const note = S('staleCacheNote');
       if (note) note.style.display = 'block';
@@ -28,7 +27,7 @@ const COLORS = ['#4f8ef7','#22c55e','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f9
       ledger = saved.ledger || [];
       ltcgExemption = saved.ltcgExemption || 125000;
       existingGains = saved.existingGains || 0;
-      privacyMode = saved.privacyMode || false;
+      privacyMode = (saved.privacyMode !== undefined) ? saved.privacyMode : true;
       applyPrivacyIcon();
       if (state.holdings?.length) {
         showResultUI();
@@ -42,7 +41,6 @@ const COLORS = ['#4f8ef7','#22c55e','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f9
     }
   }
   if (!state.holdings?.length) showScreen('uploadScreen');
-  applyPrivacyIcon();
 })();
 
 // ── Upload wiring ─────────────────────────────────────────────────────────────
@@ -167,7 +165,7 @@ function renderPortfolio() {
   const inv = state.investor;
   S('investorBar').innerHTML = `
     <span class="investor-name">${inv.name||''}</span>
-    ${inv.email ? `<span>·</span><span>${inv.email}</span>` : ''}
+    ${inv.email ? `<span>·</span><span>${privacyMode ? maskEmail(inv.email) : inv.email}</span>` : ''}
     ${inv.valuation_date ? `<span>·</span><span>${inv.valuation_date}</span>` : ''}
     ${Object.keys(liveNAVs).length ? `<span class="nav-badge">✓ NAVs live</span>` : ''}
   `;
@@ -191,7 +189,7 @@ function renderPortfolio() {
         <div class="hc-top"><div class="hc-name">${x.scheme}</div><div class="hc-value">${fmt(x.currentValue)}</div></div>
         <div class="hc-mid">
           <div class="hc-meta">${x.units.toFixed(3)} units · NAV ₹${x.nav.toFixed(4)}<br>
-            Folio ${x.folio} · Age ${x.avgAgeDays}d · XIRR ${x.xirr}%<br>${aging}</div>
+            Folio ${privacyMode ? maskFolio(x.folio) : x.folio} · Age ${x.avgAgeDays}d · XIRR ${x.xirr}%<br>${aging}</div>
           <div class="hc-right">
             <div class="hc-gain ${gcls}">${sign(x.appreciation)}${fmt(x.appreciation)} (${sign(x.appreciation)}${pct}%)</div>
             <div style="margin-top:3px">${ageBadge}</div>${ltcgLine}${navLine}
@@ -680,8 +678,6 @@ async function doReset() {
   await clearState();
   state = { investor:{}, holdings:[], rawText:'', format:'' };
   liveNAVs = {}; ledger = []; newsRendered = false; companiesRendered = false;
-  privacyMode = false;
-  applyPrivacyIcon();
   S('tabs').style.display = 'none'; S('resetBtn').style.display = 'none';
   S('savedBadge').style.display = 'none';
   S('fileInput').value = ''; S('parseLog').innerHTML = '';
@@ -694,6 +690,25 @@ async function doReset() {
 function metric(label, val, sub='', cls='neu') {
   return `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${cls}">${val}</div>${sub?`<div class="metric-sub ${cls}">${sub}</div>`:''}</div>`;
 }
+// Mask a plain string: replace every alphanumeric char with X
+function maskText(s) {
+  if (!s) return s;
+  return String(s).replace(/[a-zA-Z0-9]/g, 'X');
+}
+// Mask email: keep domain visible shape, hide local part and domain name
+function maskEmail(email) {
+  if (!email) return email;
+  const [local, domain] = email.split('@');
+  if (!domain) return maskText(email);
+  const [domName, ...tld] = domain.split('.');
+  return 'X'.repeat(Math.max(3, local.length)) + '@' + 'X'.repeat(domName.length) + '.' + tld.join('.');
+}
+// Mask folio: keep length visible but replace chars
+function maskFolio(f) {
+  if (!f) return f;
+  return String(f).replace(/[a-zA-Z0-9]/g, 'X');
+}
+
 function fmt(n) {
   if (n==null||isNaN(n)) return '–';
   if (privacyMode) {
@@ -733,9 +748,7 @@ function guessAMC(s) {
 }
 function applyPrivacyIcon() {
   const eye = S('eyeIcon'), eyeOff = S('eyeOffIcon'), btn = S('privacyBtn');
-  if (!eye || !btn) return;
-  btn.disabled = false;
-  btn.style.opacity = '';
+  if (!eye) return;
   eye.style.display = privacyMode ? 'none' : 'block';
   eyeOff.style.display = privacyMode ? 'block' : 'none';
   btn.style.color = privacyMode ? 'var(--amber)' : '';
