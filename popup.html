@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>taxMuktMf</title>
+  <link rel="stylesheet" href="popup.css"/>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <div class="header-logo">
+      <div class="logo-icon">₹</div>
+      <div>
+        <div class="logo-title">taxMuktMf</div>
+        <div class="logo-sub">LTCG Tax Harvesting</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span id="savedBadge" class="saved-badge" style="display:none">● saved</span>
+      <button id="resetBtn" class="btn-icon" title="Reset & clear saved data" style="display:none">↺</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs" style="display:none">
+    <button class="tab active" data-tab="portfolio">Portfolio</button>
+    <button class="tab" data-tab="ltcg">LTCG</button>
+    <button class="tab" data-tab="ledger">Ledger</button>
+    <button class="tab" data-tab="holdings">Holdings</button>
+    <button class="tab" data-tab="news">News</button>
+    <button class="tab" data-tab="raw">Raw</button>
+  </nav>
+
+  <!-- Upload -->
+  <section id="uploadScreen" class="screen">
+    <div class="upload-zone" id="dropZone">
+      <div class="upload-icon-wrap">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14,2 14,8 20,8"/>
+          <line x1="12" y1="18" x2="12" y2="12"/><polyline points="9,15 12,12 15,15"/>
+        </svg>
+      </div>
+      <p class="upload-title">Drop your CAMS Portfolio Valuation PDF</p>
+      <p class="upload-hint">Download from <strong>camsonline.com</strong> → Investors → Statements → Portfolio Valuation Statement</p>
+      <label class="btn btn-primary" for="fileInput">Browse file</label>
+      <input type="file" id="fileInput" accept=".pdf" style="display:none"/>
+    </div>
+    <div class="info-note">
+      <span class="info-dot"></span>
+      Parsed locally · Nothing leaves your device · Auto-saved in Chrome
+    </div>
+  </section>
+
+  <!-- Parsing -->
+  <section id="parsingScreen" class="screen" style="display:none">
+    <div class="parsing-wrap">
+      <div class="progress-ring">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle cx="36" cy="36" r="30" fill="none" stroke="#1a1a24" stroke-width="5"/>
+          <circle id="progressRing" cx="36" cy="36" r="30" fill="none" stroke="#4f8ef7" stroke-width="5"
+            stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="188.5"
+            transform="rotate(-90 36 36)" style="transition:stroke-dashoffset 0.3s ease"/>
+        </svg>
+        <span id="progressPct" class="progress-pct">0%</span>
+      </div>
+      <p class="parsing-title" id="parsingTitle">Reading PDF…</p>
+      <p class="parsing-sub" id="parsingSub"></p>
+      <div class="progress-bar-wrap"><div id="progressBar" class="progress-bar"></div></div>
+      <div class="parse-log" id="parseLog"></div>
+    </div>
+  </section>
+
+  <!-- Portfolio -->
+  <section id="portfolioScreen" class="screen" style="display:none">
+    <div class="metrics-grid" id="metricsGrid"></div>
+    <div id="pieContainer"></div>
+    <div class="investor-bar" id="investorBar"></div>
+    <div id="holdingsTable"></div>
+  </section>
+
+  <!-- LTCG -->
+  <section id="ltcgScreen" class="screen" style="display:none">
+    <div class="card" id="ltcgSettings"></div>
+    <div id="ltcgResults"></div>
+  </section>
+
+  <!-- Ledger -->
+  <section id="ledgerScreen" class="screen" style="display:none">
+    <div id="ledgerContent"></div>
+  </section>
+
+  <!-- Holdings / Companies -->
+  <section id="holdingsScreen" class="screen" style="display:none">
+    <div id="companiesContent"><div class="news-loading">Select a fund to see its holdings.</div></div>
+  </section>
+
+  <!-- News -->
+  <section id="newsScreen" class="screen" style="display:none">
+    <div id="newsContent"><div class="news-loading">Loading fund data…</div></div>
+  </section>
+
+  <!-- Raw -->
+  <section id="rawScreen" class="screen" style="display:none">
+    <pre id="rawText" class="raw-text"></pre>
+  </section>
+
+  <!-- Error -->
+  <section id="errorScreen" class="screen" style="display:none">
+    <div class="error-wrap">
+      <div class="error-icon">✕</div>
+      <p class="error-title">Could not parse this PDF</p>
+      <p class="error-sub" id="errorMsg"></p>
+      <button class="btn btn-primary" id="tryAgainBtn">Try another file</button>
+    </div>
+  </section>
+</div>
+<script type="module" src="popup.js"></script>
+</body>
+</html>
