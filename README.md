@@ -77,6 +77,13 @@ Get your statement: [camsonline.com](https://www.camsonline.com) â†’ Investors â
 
 Then: go to the **LTCG** tab, enter any gains already booked this FY, click **Calculate**.
 
+<img width="662" height="319" alt="image" src="https://github.com/user-attachments/assets/0dd8e1b6-3358-4e4a-94e7-e109ffade88e" />
+<img width="1340" height="1284" alt="image" src="https://github.com/user-attachments/assets/39028b5d-ea31-4021-b433-341d6e1a0d3a" />
+<img width="1238" height="1216" alt="image" src="https://github.com/user-attachments/assets/3063946a-8fe2-4df1-80b8-91850f9f8dcd" />
+<img width="650" height="614" alt="image" src="https://github.com/user-attachments/assets/c49e3925-2498-4752-9f98-c43d7b06e211" />
+<img width="635" height="612" alt="image" src="https://github.com/user-attachments/assets/b6254a58-ebc1-4e00-84a0-3613d6e1ec7a" />
+
+
 ---
 
 ## LTCG Harvesting
